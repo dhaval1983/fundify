@@ -54,7 +54,20 @@ class User {
             
             $this->db->execute($query, $params);
             $userId = $this->db->lastInsertId();
-            
+            $this->db->execute($query, $params);
+$userId = $this->db->lastInsertId();
+
+// ADD THESE 4 LINES:
+require_once __DIR__ . '/Mailer.php';
+$mailer = new Mailer();
+$emailSent = $mailer->sendVerificationEmail($data['email'], $verificationToken, $data['full_name']);
+
+if ($emailSent) {
+    return ['success' => true, 'user_id' => $userId, 'message' => 'Registration successful! Please check your email to verify your account before logging in.'];
+} else {
+    error_log("Verification email failed to send for user: " . $data['email']);
+    return ['success' => true, 'user_id' => $userId, 'message' => 'Registration successful! However, we couldn\'t send the verification email. Please contact support.'];
+}
             return ['success' => true, 'user_id' => $userId, 'message' => 'Registration successful. Please check your email for verification.'];
             
         } catch (Exception $e) {
@@ -87,18 +100,23 @@ class User {
         return ['success' => true, 'user' => $user];
     }
     
-    public function verifyEmail($token) {
-        $query = "SELECT id, email FROM users WHERE email_verification_token = ? AND email_verification_expires > NOW()";
-        $user = $this->db->fetchOne($query, [$token]);
-        
-        if (!$user) {
-            return ['success' => false, 'error' => 'Invalid or expired verification token'];
-        }
-        
-        $this->db->execute("UPDATE users SET email_verified = 1, email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?", [$user['id']]);
-        
-        return ['success' => true, 'message' => 'Email verified successfully'];
+   public function verifyEmail($token) {
+    $query = "SELECT id, email, full_name, role FROM users WHERE email_verification_token = ? AND email_verification_expires > NOW()";
+    $user = $this->db->fetchOne($query, [$token]);
+    
+    if (!$user) {
+        return ['success' => false, 'error' => 'Invalid or expired verification token'];
     }
+    
+    $this->db->execute("UPDATE users SET email_verified = 1, email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?", [$user['id']]);
+    
+    // ADD THESE 3 LINES:
+    require_once __DIR__ . '/Mailer.php';
+    $mailer = new Mailer();
+    $mailer->sendWelcomeEmail($user['email'], $user['full_name'], $user['role']);
+    
+    return ['success' => true, 'message' => 'Email verified successfully! Welcome to Fundify - you can now log in.'];
+}
     
     public function isLoggedIn() {
         return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
