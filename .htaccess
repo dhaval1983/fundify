@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# SEO-friendly listing URLs
+RewriteRule ^listing/([0-9]+)/?$ listing.php?id=$1 [L,QSA]
