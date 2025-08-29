@@ -321,16 +321,7 @@ $flashMessage = Utils::getFlashMessage();
                 </div>
             <?php endif; ?>
             
-            <!-- Demo accounts for testing (remove in production) -->
-            <div class="demo-accounts">
-                <h4>🧪 Demo Accounts (Click to Fill)</h4>
-                <div class="demo-account" onclick="fillDemo('entrepreneur@demo.com', 'password123')">
-                    <strong>Entrepreneur:</strong> entrepreneur@demo.com / password123
-                </div>
-                <div class="demo-account" onclick="fillDemo('investor@demo.com', 'password123')">
-                    <strong>Investor:</strong> investor@demo.com / password123
-                </div>
-            </div>
+            
             
             <form method="POST" id="loginForm">
                 <div class="form-group">
@@ -362,11 +353,7 @@ $flashMessage = Utils::getFlashMessage();
     </div>
     
     <script>
-        // Demo account filling (remove in production)
-        function fillDemo(email, password) {
-            document.getElementById('email').value = email;
-            document.getElementById('password').value = password;
-        }
+        
         
         // Form submission handling
         document.getElementById('loginForm').addEventListener('submit', function(e) {
