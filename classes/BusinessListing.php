@@ -89,6 +89,36 @@ class BusinessListing {
         return $listings;
     }
     
+    // Get single business listing by SLUG with privacy controls
+public function getListingBySlug($slug, $userRole = 'public') {
+    $selectFields = $this->getSelectFieldsByRole($userRole);
+    
+    $query = "SELECT {$selectFields} FROM business_listings bl 
+              JOIN companies c ON bl.company_id = c.id 
+              JOIN users u ON bl.user_id = u.id 
+              WHERE bl.slug = ? AND bl.status = 'active'";
+    
+    $listing = $this->db->fetchOne($query, [$slug]);
+    
+    if (!$listing) return null;
+    
+    // Get team members
+    $listing['team_members'] = $this->getTeamMembers($listing['id']);
+    
+    // Get uploaded files (based on access level)
+    $listing['files'] = $this->getListingFiles($listing['id'], $userRole);
+    
+    // Apply privacy masking if needed
+    if ($userRole === 'public') {
+        $listing = $this->maskSensitiveData([$listing])[0];
+    }
+    
+    // Track view
+    $this->trackView($listing['id'], $_SESSION['user_id'] ?? null);
+    
+    return $listing;
+}
+    
     // Count total listings with filters
     public function countListings($filters = []) {
         $whereConditions = ["bl.status = 'active'"];

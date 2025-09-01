@@ -578,11 +578,14 @@ $totalPages = ceil($totalListings / 20);
                         </div>
                         
                         <div class="listing-actions">
-                            <a href="listing.php?id=<?php echo $listing['id']; ?>" class="btn btn-secondary">View Details</a>
+                            
+                            <a href="listing/<?php echo $listing['slug']; ?>" class="btn btn-secondary">View Details</a>
+
                             <?php if (!$currentUser): ?>
                                 <a href="register.php" class="btn btn-primary">Register to Connect</a>
                             <?php else: ?>
                                 <a href="contact.php?listing=<?php echo $listing['id']; ?>" class="btn btn-primary">Contact Founder</a>
+
                             <?php endif; ?>
                         </div>
                     </div>
