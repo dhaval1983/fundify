@@ -21,32 +21,61 @@ $currentUser = $user->getCurrentUser();
 $userRole = $currentUser ? 'registered' : 'public';
 
 // Get listing ID
+// Get listing by slug or ID
+$slug = $_GET['slug'] ?? '';
 $listingId = (int)($_GET['id'] ?? 0);
 
-if (!$listingId) {
-    header('Location: browse.php');
+$listing = null;
+
+if (!empty($slug)) {
+    // Try to get by slug first
+    $listing = $businessListing->getListingBySlug($slug, $userRole);
+} elseif ($listingId > 0) {
+    // Fallback to ID for backward compatibility
+    $listing = $businessListing->getListing($listingId, $userRole);
+} else {
+    header('Location: /browse.php');
     exit;
 }
 
-// Get listing details
-$listing = $businessListing->getListing($listingId, $userRole);
 
-if (!$listing) {
-    header('Location: browse.php?error=not_found');
-    exit;
-}
 
 // Check if user can contact founder
 $canContact = $currentUser && $currentUser['email_verified'];
 $isOwnListing = $currentUser && $currentUser['id'] == $listing['user_id'];
+
+// If accessed by ID, redirect to slug URL for SEO
+if ($listingId > 0 && !empty($slug) === false && !empty($listing['slug'])) {
+    header("HTTP/1.1 301 Moved Permanently");
+    header("Location: https://fundify.isowebtech.com/listing/" . $listing['slug']);
+    exit;
+}
 ?>
+
+
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    
+    <meta name="description" content="<?php echo htmlspecialchars(substr($listing['short_pitch'], 0, 160)); ?>">
+<meta name="keywords" content="<?php echo htmlspecialchars($listing['industry']); ?>, startup funding, investment opportunity, <?php echo htmlspecialchars($listing['location_city']); ?>">
+
+<!-- Open Graph tags for social media -->
+<meta property="og:title" content="<?php echo htmlspecialchars($listing['title']); ?>">
+<meta property="og:description" content="<?php echo htmlspecialchars($listing['short_pitch']); ?>">
+<meta property="og:url" content="https://fundify.isowebtech.com/listing/<?php echo htmlspecialchars($listing['slug']); ?>">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Fundify">
+
+<!-- Twitter Cards -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?php echo htmlspecialchars($listing['title']); ?>">
+<meta name="twitter:description" content="<?php echo htmlspecialchars($listing['short_pitch']); ?>">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($listing['title']); ?> - Fundify</title>
+    <link rel="canonical" href="https://fundify.isowebtech.com/listing/<?php echo htmlspecialchars($listing['slug']); ?>">
     <style>
         * {
             margin: 0;
@@ -499,23 +528,23 @@ $isOwnListing = $currentUser && $currentUser['id'] == $listing['user_id'];
         <div class="header-content">
             <div class="logo">Fundify</div>
             <nav class="nav-links">
-                <a href="index.php">Home</a>
-                <a href="browse.php">Browse</a>
+                <a href="/index.php">Home</a>
+                <a href="/browse.php">Browse</a>
                 <?php if ($currentUser): ?>
-                    <a href="dashboard.php">Dashboard</a>
-                    <a href="messages.php">Messages</a>
-                    <a href="profile.php">Profile</a>
-                    <a href="login.php?logout=1">Logout</a>
+                    <a href="/dashboard.php">Dashboard</a>
+                    <a href="/messages.php">Messages</a>
+                    <a href="/profile.php">Profile</a>
+                    <a href="/login.php?logout=1">Logout</a>
                 <?php else: ?>
-                    <a href="register.php">Join Now</a>
-                    <a href="login.php">Sign In</a>
+                    <a href="/register.php">Join Now</a>
+                    <a href="/login.php">Sign In</a>
                 <?php endif; ?>
             </nav>
         </div>
     </header>
 
     <div class="container">
-        <a href="browse.php" class="back-link">← Back to Browse</a>
+        <a href="/browse.php" class="back-link">← Back to Browse</a>
         
         <div class="listing-header">
             <?php if ($listing['is_featured']): ?>
@@ -563,7 +592,7 @@ $isOwnListing = $currentUser && $currentUser['id'] == $listing['user_id'];
                 <?php if ($userRole === 'public'): ?>
                 <div class="privacy-notice">
                     <strong>Limited Access</strong> - 
-                    <a href="register.php">Register for free</a> to see complete business details, financial information, and contact the founder
+                    <a href="/register.php">Register for free</a> to see complete business details, financial information, and contact the founder
                 </div>
                 <?php endif; ?>
 
@@ -699,7 +728,7 @@ $isOwnListing = $currentUser && $currentUser['id'] == $listing['user_id'];
                             </div>
                             <a href="verify.php" class="btn btn-secondary">Verify Email</a>
                         <?php else: ?>
-                            <a href="register.php" class="btn btn-primary">Register to Contact</a>
+                            <a href="/register.php" class="btn btn-primary">Register to Contact</a>
                             <a href="login.php" class="btn btn-secondary">Sign In</a>
                         <?php endif; ?>
                     </div>

@@ -1,4 +1,7 @@
 RewriteEngine On
 
-# SEO-friendly listing URLs
+# Backward compatibility - numeric IDs (must come FIRST)
 RewriteRule ^listing/([0-9]+)/?$ listing.php?id=$1 [L,QSA]
+
+# SEO-friendly listing URLs with slugs (comes SECOND)
+RewriteRule ^listing/([a-z0-9-]+)/?$ listing.php?slug=$1 [L,QSA]
