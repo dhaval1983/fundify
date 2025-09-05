@@ -1,5 +1,5 @@
 <?php
-// create-listing.php - Enhanced with complete financial and company sections
+// create-listing-v3.php - Version 3 with email notifications and save draft
 session_start();
 
 // Load configuration and classes
@@ -35,13 +35,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_draft') {
     try {
         $db = Database::getInstance();
         
-        // Save draft data to session - UPDATED with company and financial fields
+        // Save draft data to session
         $_SESSION['listing_draft'] = [
             'company_name' => trim($_POST['company_name'] ?? ''),
-            'brand_name' => trim($_POST['brand_name'] ?? ''),
-            'company_type' => trim($_POST['company_type'] ?? ''),
-            'founded_year' => $_POST['founded_year'] ?? '',
-            'website_url' => trim($_POST['website_url'] ?? ''),
             'title' => trim($_POST['title'] ?? ''),
             'short_pitch' => trim($_POST['short_pitch'] ?? ''),
             'detailed_description' => trim($_POST['detailed_description'] ?? ''),
@@ -49,10 +45,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_draft') {
             'business_stage' => trim($_POST['business_stage'] ?? ''),
             'funding_amount_needed' => $_POST['funding_amount_needed'] ?? '',
             'current_monthly_revenue' => $_POST['current_monthly_revenue'] ?? '',
-            'current_annual_revenue' => $_POST['current_annual_revenue'] ?? '',
-            'previous_funding' => $_POST['previous_funding'] ?? '',
-            'current_valuation' => $_POST['current_valuation'] ?? '',
-            'breakeven_timeline_months' => $_POST['breakeven_timeline_months'] ?? '',
             'equity_offered_min' => $_POST['equity_offered_min'] ?? '',
             'equity_offered_max' => $_POST['equity_offered_max'] ?? '',
             'fund_usage_plan' => trim($_POST['fund_usage_plan'] ?? ''),
@@ -79,12 +71,8 @@ $messageType = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $errors = [];
     
-    // Enhanced validation - UPDATED with company and financial fields
+    // Enhanced validation
     $company_name = trim($_POST['company_name'] ?? '');
-    $brand_name = trim($_POST['brand_name'] ?? '');
-    $company_type = trim($_POST['company_type'] ?? '');
-    $founded_year = (int)($_POST['founded_year'] ?? 0);
-    $website_url = trim($_POST['website_url'] ?? '');
     $title = trim($_POST['title'] ?? '');
     $short_pitch = trim($_POST['short_pitch'] ?? '');
     $detailed_description = trim($_POST['detailed_description'] ?? '');
@@ -94,24 +82,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $min_equity = (float)($_POST['equity_offered_min'] ?? 0);
     $max_equity = (float)($_POST['equity_offered_max'] ?? 0);
     $current_revenue = (float)($_POST['current_monthly_revenue'] ?? 0);
-    $current_annual_revenue = (float)($_POST['current_annual_revenue'] ?? 0);
-    $previous_funding = (float)($_POST['previous_funding'] ?? 0);
-    $current_valuation = (float)($_POST['current_valuation'] ?? 0);
-    $breakeven_months = (int)($_POST['breakeven_timeline_months'] ?? 0);
     $fund_usage = trim($_POST['fund_usage_plan'] ?? '');
     $target_market = trim($_POST['target_market'] ?? '');
     $location_city = trim($_POST['location_city'] ?? '');
     $location_state = trim($_POST['location_state'] ?? '');
     
-    // Basic validation
+    // Validation
     if (empty($company_name)) $errors[] = 'Company name is required';
-    if (empty($company_type)) $errors[] = 'Company type is required';
-    if ($founded_year < 1900 || $founded_year > date('Y')) {
-        $errors[] = 'Please enter a valid founded year';
-    }
-    if (!empty($website_url) && !filter_var($website_url, FILTER_VALIDATE_URL)) {
-        $errors[] = 'Please enter a valid website URL';
-    }
     if (empty($title)) $errors[] = 'Business title is required';
     if (empty($short_pitch)) $errors[] = 'Short pitch is required';
     if (empty($detailed_description)) $errors[] = 'Detailed description is required';
@@ -123,30 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     if (empty($fund_usage)) $errors[] = 'Fund usage plan is required';
     if (empty($location_city) || empty($location_state)) $errors[] = 'Company location is required';
     
-    // Enhanced financial validations
-    if ($current_revenue > 0 && $current_annual_revenue > 0) {
-        $expectedAnnual = $current_revenue * 12;
-        if (abs($current_annual_revenue - $expectedAnnual) > ($expectedAnnual * 0.5)) {
-            $errors[] = 'Annual revenue should roughly match monthly revenue × 12';
-        }
-    }
-    
-    if ($current_valuation > 0 && $funding_amount > 0) {
-        if ($funding_amount > ($current_valuation * 0.5)) {
-            $errors[] = 'Funding amount seems too high compared to current valuation';
-        }
-    }
-    
-    if ($breakeven_months > 120) {
-        $errors[] = 'Breakeven timeline cannot exceed 120 months (10 years)';
-    }
-    
     if (empty($errors)) {
         try {
             $db = Database::getInstance();
             $db->beginTransaction();
             
-            // Create or update company record - UPDATED with all company fields
+            // Create or update company record
             $existingCompany = $db->fetchOne(
                 "SELECT id FROM companies WHERE user_id = ? AND company_name = ?",
                 [$currentUser['id'], $company_name]
@@ -156,19 +115,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
                 $companyId = $existingCompany['id'];
                 // Update existing company
                 $db->execute(
-                    "UPDATE companies SET brand_name = ?, company_type = ?, founded_year = ?, 
-                     website_url = ?, location_city = ?, location_state = ?, updated_at = NOW() WHERE id = ?",
-                    [$brand_name, $company_type, $founded_year, $website_url, 
-                     $location_city, $location_state, $companyId]
+                    "UPDATE companies SET location_city = ?, location_state = ?, updated_at = NOW() WHERE id = ?",
+                    [$location_city, $location_state, $companyId]
                 );
             } else {
                 // Create new company
                 $db->execute(
-                    "INSERT INTO companies (user_id, company_name, brand_name, company_type, 
-                     founded_year, website_url, location_city, location_state, created_at, updated_at) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
-                    [$currentUser['id'], $company_name, $brand_name, $company_type, 
-                     $founded_year, $website_url, $location_city, $location_state]
+                    "INSERT INTO companies (user_id, company_name, location_city, location_state, created_at, updated_at) 
+                     VALUES (?, ?, ?, ?, NOW(), NOW())",
+                    [$currentUser['id'], $company_name, $location_city, $location_state]
                 );
                 $companyId = $db->lastInsertId();
             }
@@ -176,19 +131,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
             // Generate slug
             $slug = generateSlug($title, $db);
             
-            // Insert business listing with ALL fields including new financial ones
+            // Insert business listing with more fields
             $db->execute(
                 "INSERT INTO business_listings (
                     company_id, user_id, title, short_pitch, detailed_description, industry, business_stage,
-                    funding_amount_needed, current_monthly_revenue, current_annual_revenue, previous_funding, 
-                    current_valuation, breakeven_timeline_months, equity_offered_min, equity_offered_max,
+                    funding_amount_needed, current_monthly_revenue, equity_offered_min, equity_offered_max,
                     fund_usage_plan, target_market, status, slug, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())",
                 [
                     $companyId, $currentUser['id'], $title, $short_pitch, $detailed_description, 
-                    $industry, $business_stage, $funding_amount, $current_revenue, $current_annual_revenue,
-                    $previous_funding, $current_valuation, $breakeven_months, $min_equity, $max_equity, 
-                    $fund_usage, $target_market, $slug
+                    $industry, $business_stage, $funding_amount, $current_revenue, 
+                    $min_equity, $max_equity, $fund_usage, $target_market, $slug
                 ]
             );
             
@@ -408,7 +361,7 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
 
         <form method="POST" id="listing-form" class="space-y-8">
             
-            <!-- ENHANCED Company Information -->
+            <!-- Company Information -->
             <div class="bg-white rounded-xl shadow-sm border p-8">
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center">
@@ -417,7 +370,7 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                         </div>
                         <div>
                             <h2 class="text-xl font-semibold text-gray-900">Company Information</h2>
-                            <p class="text-gray-600">Complete details about your company</p>
+                            <p class="text-gray-600">Basic details about your company</p>
                         </div>
                     </div>
                     <button type="button" id="save-draft-btn" class="text-blue-600 hover:text-blue-800 text-sm">
@@ -426,7 +379,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                 </div>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Company Name -->
                     <div class="lg:col-span-2">
                         <label for="company_name" class="block text-sm font-medium text-gray-700 mb-2">
                             Company Name *
@@ -438,68 +390,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                                required>
                     </div>
 
-                    <!-- Brand Name -->
-                    <div>
-                        <label for="brand_name" class="block text-sm font-medium text-gray-700 mb-2">
-                            Brand Name
-                        </label>
-                        <input type="text" id="brand_name" name="brand_name" 
-                               value="<?php echo htmlspecialchars($draftData['brand_name'] ?? $_POST['brand_name'] ?? ''); ?>"
-                               placeholder="TechLogic"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Marketing name (if different from company name)</p>
-                    </div>
-
-                    <!-- Company Type -->
-                    <div>
-                        <label for="company_type" class="block text-sm font-medium text-gray-700 mb-2">
-                            Company Type *
-                        </label>
-                        <select id="company_type" name="company_type" 
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                required>
-                            <option value="">Select Company Type</option>
-                            <?php
-                            $companyTypes = [
-                                'startup' => 'Startup',
-                                'private_limited' => 'Private Limited Company',
-                                'llp' => 'Limited Liability Partnership (LLP)',
-                                'partnership' => 'Partnership Firm',
-                                'proprietorship' => 'Sole Proprietorship'
-                            ];
-                            $selectedType = $draftData['company_type'] ?? $_POST['company_type'] ?? '';
-                            foreach ($companyTypes as $value => $label):
-                            ?>
-                            <option value="<?php echo $value; ?>" <?php echo $selectedType === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <!-- Founded Year -->
-                    <div>
-                        <label for="founded_year" class="block text-sm font-medium text-gray-700 mb-2">
-                            Founded Year *
-                        </label>
-                        <input type="number" id="founded_year" name="founded_year" 
-                               value="<?php echo $draftData['founded_year'] ?? $_POST['founded_year'] ?? ''; ?>"
-                               min="1900" max="<?php echo date('Y'); ?>" placeholder="<?php echo date('Y'); ?>"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                               required>
-                    </div>
-
-                    <!-- Website URL -->
-                    <div>
-                        <label for="website_url" class="block text-sm font-medium text-gray-700 mb-2">
-                            Website URL
-                        </label>
-                        <input type="url" id="website_url" name="website_url" 
-                               value="<?php echo htmlspecialchars($draftData['website_url'] ?? $_POST['website_url'] ?? ''); ?>"
-                               placeholder="https://techlogic.in"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Include https:// (optional if not launched yet)</p>
-                    </div>
-
-                    <!-- City -->
                     <div>
                         <label for="location_city" class="block text-sm font-medium text-gray-700 mb-2">
                             City *
@@ -511,7 +401,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                                required>
                     </div>
 
-                    <!-- State -->
                     <div>
                         <label for="location_state" class="block text-sm font-medium text-gray-700 mb-2">
                             State *
@@ -521,36 +410,13 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                                 required>
                             <option value="">Select State</option>
                             <?php
-                            $states = [
-                                'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 
-                                'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 
-                                'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 
-                                'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 
-                                'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 
-                                'Uttarakhand', 'West Bengal'
-                            ];
+                            $states = ['Gujarat', 'Maharashtra', 'Karnataka', 'Delhi', 'Tamil Nadu', 'West Bengal', 'Rajasthan', 'Uttar Pradesh'];
                             $selectedState = $draftData['location_state'] ?? $_POST['location_state'] ?? '';
                             foreach ($states as $state):
                             ?>
                             <option value="<?php echo $state; ?>" <?php echo $selectedState === $state ? 'selected' : ''; ?>><?php echo $state; ?></option>
                             <?php endforeach; ?>
                         </select>
-                    </div>
-                </div>
-
-                <!-- Company Information Tips -->
-                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
-                    <div class="flex items-start">
-                        <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
-                        <div class="text-sm text-blue-700">
-                            <strong>Company Setup Tips:</strong>
-                            <ul class="list-disc list-inside mt-2 space-y-1">
-                                <li>Ensure your company name matches official registration documents</li>
-                                <li>Website URL helps investors verify your business presence</li>
-                                <li>Private Limited companies often appear more investment-ready</li>
-                                <li>Brand name can be simpler/catchier than the legal company name</li>
-                            </ul>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -658,7 +524,7 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                 </div>
             </div>
 
-            <!-- ENHANCED Financial Information Section -->
+            <!-- Financial Information -->
             <div class="bg-white rounded-xl shadow-sm border p-8">
                 <div class="flex items-center mb-6">
                     <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
@@ -671,7 +537,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                 </div>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Funding Amount Needed -->
                     <div>
                         <label for="funding_amount_needed" class="block text-sm font-medium text-gray-700 mb-2">
                             Funding Needed (₹) *
@@ -684,19 +549,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                         <p class="text-sm text-gray-500 mt-1">Amount in INR</p>
                     </div>
 
-                    <!-- Current Valuation -->
-                    <div>
-                        <label for="current_valuation" class="block text-sm font-medium text-gray-700 mb-2">
-                            Current Valuation (₹)
-                        </label>
-                        <input type="number" id="current_valuation" name="current_valuation" 
-                               value="<?php echo $draftData['current_valuation'] ?? $_POST['current_valuation'] ?? ''; ?>"
-                               min="0" step="1000000" placeholder="180000000"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Your company's estimated worth</p>
-                    </div>
-
-                    <!-- Current Monthly Revenue -->
                     <div>
                         <label for="current_monthly_revenue" class="block text-sm font-medium text-gray-700 mb-2">
                             Current Monthly Revenue (₹)
@@ -708,43 +560,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                         <p class="text-sm text-gray-500 mt-1">Leave blank if no revenue yet</p>
                     </div>
 
-                    <!-- Current Annual Revenue -->
-                    <div>
-                        <label for="current_annual_revenue" class="block text-sm font-medium text-gray-700 mb-2">
-                            Current Annual Revenue (₹)
-                        </label>
-                        <input type="number" id="current_annual_revenue" name="current_annual_revenue" 
-                               value="<?php echo $draftData['current_annual_revenue'] ?? $_POST['current_annual_revenue'] ?? ''; ?>"
-                               min="0" step="100000" placeholder="9500000"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Total revenue for the last 12 months</p>
-                    </div>
-
-                    <!-- Previous Funding -->
-                    <div>
-                        <label for="previous_funding" class="block text-sm font-medium text-gray-700 mb-2">
-                            Previous Funding Raised (₹)
-                        </label>
-                        <input type="number" id="previous_funding" name="previous_funding" 
-                               value="<?php echo $draftData['previous_funding'] ?? $_POST['previous_funding'] ?? ''; ?>"
-                               min="0" step="100000" placeholder="2500000"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Total amount raised in previous rounds</p>
-                    </div>
-
-                    <!-- Breakeven Timeline -->
-                    <div>
-                        <label for="breakeven_timeline_months" class="block text-sm font-medium text-gray-700 mb-2">
-                            Breakeven Timeline (Months)
-                        </label>
-                        <input type="number" id="breakeven_timeline_months" name="breakeven_timeline_months" 
-                               value="<?php echo $draftData['breakeven_timeline_months'] ?? $_POST['breakeven_timeline_months'] ?? ''; ?>"
-                               min="1" max="120" placeholder="18"
-                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <p class="text-sm text-gray-500 mt-1">Months to reach profitability</p>
-                    </div>
-
-                    <!-- Min Equity -->
                     <div>
                         <label for="equity_offered_min" class="block text-sm font-medium text-gray-700 mb-2">
                             Min Equity Offered (%) *
@@ -756,7 +571,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                                required>
                     </div>
 
-                    <!-- Max Equity -->
                     <div>
                         <label for="equity_offered_max" class="block text-sm font-medium text-gray-700 mb-2">
                             Max Equity Offered (%) *
@@ -769,7 +583,6 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                     </div>
                 </div>
 
-                <!-- Fund Usage Plan -->
                 <div class="mt-6">
                     <label for="fund_usage_plan" class="block text-sm font-medium text-gray-700 mb-2">
                         Fund Usage Plan *
@@ -780,18 +593,11 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
                               required><?php echo htmlspecialchars($draftData['fund_usage_plan'] ?? $_POST['fund_usage_plan'] ?? ''); ?></textarea>
                 </div>
 
-                <!-- Enhanced Investment Tips -->
                 <div class="mt-6 p-4 bg-blue-50 rounded-lg">
                     <div class="flex items-start">
                         <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
                         <div class="text-sm text-blue-700">
-                            <strong>Financial Tips:</strong>
-                            <ul class="list-disc list-inside mt-2 space-y-1">
-                                <li>Be realistic with your valuation - research similar companies</li>
-                                <li>Most startups offer 10-25% equity in early funding rounds</li>
-                                <li>Show clear path to profitability with breakeven timeline</li>
-                                <li>Be specific about fund usage with percentages</li>
-                            </ul>
+                            <strong>Investment Tip:</strong> Most startups offer 10-25% equity in early funding rounds. Be specific about how you'll use the investment funds.
                         </div>
                     </div>
                 </div>
@@ -876,35 +682,14 @@ function createEntrepreneurConfirmationEmail($user, $title, $companyName, $slug)
             }, 3000);
         }
 
-        // Enhanced form validation
+        // Form validation
         document.querySelector('form').addEventListener('submit', function(e) {
             const minEquity = parseFloat(document.getElementById('equity_offered_min').value) || 0;
             const maxEquity = parseFloat(document.getElementById('equity_offered_max').value) || 0;
-            const monthlyRevenue = parseFloat(document.getElementById('current_monthly_revenue').value) || 0;
-            const annualRevenue = parseFloat(document.getElementById('current_annual_revenue').value) || 0;
-            const websiteUrl = document.getElementById('website_url').value;
             
             if (minEquity > maxEquity) {
                 e.preventDefault();
                 alert('Minimum equity cannot be greater than maximum equity');
-                return false;
-            }
-            
-            // Check revenue consistency
-            if (monthlyRevenue > 0 && annualRevenue > 0) {
-                const expectedAnnual = monthlyRevenue * 12;
-                if (Math.abs(annualRevenue - expectedAnnual) > (expectedAnnual * 0.5)) {
-                    if (!confirm('Your annual revenue doesn\'t match monthly revenue × 12. Continue anyway?')) {
-                        e.preventDefault();
-                        return false;
-                    }
-                }
-            }
-            
-            // Validate URL format if provided
-            if (websiteUrl && !websiteUrl.startsWith('http://') && !websiteUrl.startsWith('https://')) {
-                e.preventDefault();
-                alert('Website URL must start with http:// or https://');
                 return false;
             }
             
